@@ -1,20 +1,21 @@
 package main
 
+
 import (
+	"fmt"
+
 	"cwtch.im/cwtch/event"
 	"cwtch.im/cwtch/model"
 	"cwtch.im/cwtch/model/attr"
 	"cwtch.im/cwtch/model/constants"
-	"fmt"
 	"git.openprivacy.ca/sarah/cwtchbot"
 	_ "github.com/mutecomm/go-sqlcipher/v4"
-	_ "os/user"
-	_ "path"
+
+	"github.com/functionally/cyfryngwr/rss"
 )
 
 func main() {
-	//user, _ := user.Current()
-	//cwtchbot := bot.NewCwtchBot(path.Join(user.HomeDir, "/.echobot/"), "echobot")
+
 	cwtchbot := bot.NewCwtchBot(".echobot/", "echobot")
 	cwtchbot.Launch()
 
@@ -31,13 +32,12 @@ func main() {
 		case event.NewMessageFromPeer:
 			msg := cwtchbot.UnpackMessage(message.Data[event.Data])
 			fmt.Printf("Message: %v\n", msg)
-			reply := string(cwtchbot.PackMessage(msg.Overlay, msg.Data))
+	//reply := string(cwtchbot.PackMessage(msg.Overlay, msg.Data))
+			reply, _ := rss.Message(cwtchbot, "https://haskellweekly.news/podcast.rss")
 			cwtchbot.Peer.SendMessage(cid.ID, reply)
 		case event.ContactCreated:
 			fmt.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])
-			// accept the stranger as a new contact
 			cwtchbot.Peer.AcceptConversation(cid.ID)
-			// Send Hello...
 			reply := string(cwtchbot.PackMessage(model.OverlayChat, "Hello!"))
 			cwtchbot.Peer.SendMessage(cid.ID, reply)
 		}

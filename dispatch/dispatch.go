@@ -3,10 +3,12 @@ package dispatch
 import (
     "bytes"
     "fmt"
-    "log"
+    "strings"
 
     "github.com/google/shlex"
     "github.com/spf13/cobra"
+
+	"github.com/functionally/cyfryngwr/rss"
 )
 
 var (
@@ -17,12 +19,13 @@ var (
 func Run(input string) (string, error) {
 
     var result bytes.Buffer
+    var errResult error = nil
 
     var rootCmd = &cobra.Command{
-        Use:   "",
+        Use:   "/",
         Short: "Cyfryngwr agent",
         Run: func(cmd *cobra.Command, args []string) {
-	    result.WriteString("Send `--help` for usage.")
+	    cmd.Help()
         },
     }
     rootCmd.SetOut(&result)
@@ -36,37 +39,39 @@ func Run(input string) (string, error) {
     }
     rootCmd.AddCommand(versionCmd)
 
-    // Define the 'greet' subcommand.
-    var name string
-    var greetCmd = &cobra.Command{
-        Use:   "greet",
-        Short: "Greet the user",
+    var rssCmd = &cobra.Command{
+      Use: "rss",
+      Short: "Access RSS feeds",
+      Run: func(cmd *cobra.Command, args []string) {
+	    cmd.Help()
+      },
+    }
+    {
+      var url string
+      var rssFetchCmd = &cobra.Command{
+        Use: "fetch",
+        Short: "Fetch items from RSS feed",
         Run: func(cmd *cobra.Command, args []string) {
-            if name == "" {
-                name = "World"
-            }
-            result.WriteString(fmt.Sprintf("Hello, %s!\n", name))
+    	feed, err := rss.FetchRSS(url)
+	if err != nil {
+	  errResult = err
+	} 
+	result.WriteString(fmt.Sprintf("%s\n%s", feed.Title, feed.Items[0].Title))
         },
+      }
+      rssFetchCmd.Flags().StringVarP(&url, "url", "u", "", "URL for feed")
+    rssCmd.AddCommand(rssFetchCmd)
     }
-    greetCmd.Flags().StringVarP(&name, "name", "n", "", "Name to greet")
-    rootCmd.AddCommand(greetCmd)
+    rootCmd.AddCommand(rssCmd)
 
-    // Example input string containing quotes and escapes.
-//  input := `greet --name "Alice Bob"`
-
-    // Use shlex to parse the input string into an array of arguments.
-    args, err := shlex.Split(input)
+    args, err := shlex.Split(strings.TrimPrefix(input, "/"))
     if err != nil {
-        log.Fatalf("Failed to split input: %v", err)
+        return "", err
     }
-
-    // Set the parsed arguments for Cobra instead of using os.Args.
     rootCmd.SetArgs(args)
-
-    // Execute the command.
     if err := rootCmd.Execute(); err != nil {
-        fmt.Println("Error:", err)
+        return "", err
     }
     
-    return result.String(), nil
+    return result.String(), errResult
 }

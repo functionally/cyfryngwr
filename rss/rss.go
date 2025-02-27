@@ -2,28 +2,13 @@ package rss
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/mmcdole/gofeed"
-
-	"cwtch.im/cwtch/model"
-	"git.openprivacy.ca/sarah/cwtchbot"
 )
 
-func Message(cwtchbot *bot.CwtchBot, url string) (string, error) {
-	feed, err := fetchRSS(url)
-	if err != nil {
-		log.Fatalf("Error fetching RSS: %v", err)
-	}
-	s := fmt.Sprintf("%s\n%s", feed.Title, feed.Items[0].Title)
-	reply := string(cwtchbot.PackMessage(model.OverlayChat, s))
-	return reply, nil
-
-}
-
-func fetchRSS(url string) (*gofeed.Feed, error) {
+func FetchRSS(url string) (*gofeed.Feed, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -40,3 +25,5 @@ func fetchRSS(url string) (*gofeed.Feed, error) {
 	}
 	return feed, nil
 }
+
+// EXAMPLE https://haskellweekly.news/podcast.rss

@@ -78,31 +78,7 @@ func Run(input string) (string, error) {
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	var rssCmd = &cobra.Command{
-		Use:   "rss",
-		Short: "Access RSS feeds",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
-		},
-	}
-	{
-		var url string
-		var rssFetchCmd = &cobra.Command{
-			Use:   "fetch",
-			Short: "Fetch items from RSS feed",
-			Run: func(cmd *cobra.Command, args []string) {
-				feed, err := rss.FetchRSS(url)
-				if err != nil {
-					errResult = err
-				} else {
-					result.WriteString(fmt.Sprintf("%s\n%s", feed.Title, feed.Items[0].Title))
-				}
-			},
-		}
-		rssFetchCmd.Flags().StringVarP(&url, "url", "u", "", "URL for feed")
-		rssCmd.AddCommand(rssFetchCmd)
-	}
-	rootCmd.AddCommand(rssCmd)
+	rootCmd.AddCommand(rss.Cmd(&result, &errResult))
 
 	args, err := shlex.Split(strings.TrimPrefix(input, "/"))
 	if err != nil {

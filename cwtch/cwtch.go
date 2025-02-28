@@ -24,25 +24,31 @@ func Connect(folder string, name string, description string) *bot.CwtchBot {
 	return cwtchbot
 }
 
-func Loop(cwtchbot *bot.CwtchBot) {
+func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot) {
 	for {
 		message := cwtchbot.Queue.Next()
 		cid, err := cwtchbot.Peer.FetchConversationInfo(message.Data[event.RemotePeer])
+		handle := dispatch.Handle(cid.Handle)
+		dispatcher.Register(handle, func(response dispatch.Response) {
+			err = sendMessage(cwtchbot, cid, string(response))
+			if err != nil {
+				log.Printf("Failed to send message:\n%v\n", err)
+			}
+		})
 		if err != nil {
-			log.Printf("Failed to fetch message: %v\n", err)
+			log.Printf("Failed to fetch conversation:\n%v\n", err)
 		} else {
 			switch message.EventType {
 			case event.NewMessageFromPeer:
 				msg := cwtchbot.UnpackMessage(message.Data[event.Data])
-				log.Printf("Received message: %v\n", msg.Data)
-				result, err := dispatch.Run(msg.Data)
+				err := dispatcher.Request(handle, dispatch.Request(msg.Data))
 				if err != nil {
-					log.Printf("Failed to process message: %v\n", err)
-					result = fmt.Sprintf("Failed to process message: %v\n", err)
-				}
-				err = sendMessage(cwtchbot, cid, result)
-				if err != nil {
-					log.Printf("Failed to send message: %v\n", err)
+					log.Printf("Failed to process message:\n%v\n", err)
+					result := fmt.Sprintf("Failed to process message: %v\n", err)
+					err = sendMessage(cwtchbot, cid, result)
+					if err != nil {
+						log.Printf("Failed to send message:\n%v\n", err)
+					}
 				}
 			case event.ContactCreated:
 				fmt.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])

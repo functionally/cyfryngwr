@@ -45,13 +45,16 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot) {
 			switch message.EventType {
 			case event.NewMessageFromPeer:
 				msg := cwtchbot.UnpackMessage(message.Data[event.Data])
-				err := dispatcher.Request(handle, dispatch.Request(msg.Data))
-				if err != nil {
-					log.Printf("Failed to process message:\n%v\n", err)
-					result := fmt.Sprintf("Failed to process message: %v\n", err)
-					err = sendMessage(cwtchbot, cid, result)
+				text := msg.Data
+				if len(text) > 0 && text[0] == "/" {
+					err := dispatcher.Request(handle, dispatch.Request(text))
 					if err != nil {
-						log.Printf("Failed to send message:\n%v\n", err)
+						log.Printf("Failed to process message:\n%v\n", err)
+						result := fmt.Sprintf("Failed to process message: %v\n", err)
+						err = sendMessage(cwtchbot, cid, result)
+						if err != nil {
+							log.Printf("Failed to send message:\n%v\n", err)
+						}
 					}
 				}
 			case event.ContactCreated:

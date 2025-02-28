@@ -36,30 +36,12 @@ func Cmd(results *list.List, errResult *error) *cobra.Command {
 				if err != nil {
 					*errResult = err
 				} else {
+					fmt.Printf("UPDATED %s\n", feed.Updated)
 					for i, item := range feed.Items {
 						if uint(i) >= count {
 							break
 						}
-						p := bluemonday.StrictPolicy()
-						var buffer bytes.Buffer
-						if source {
-							buffer.WriteString(fmt.Sprintf("*%s*\n", feed.Title))
-						}
-						if title {
-							buffer.WriteString(fmt.Sprintf("**%s**\n", item.Title))
-						}
-						if source || title {
-							buffer.WriteString("\n")
-						}
-						if brief {
-							buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Description)))
-						} else {
-							buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Content)))
-						}
-						if url {
-							buffer.WriteString(fmt.Sprintf("\n\n`%s`", item.Link))
-						}
-						results.PushBack(buffer.String())
+						results.PushBack(formatItem(feed, item, source, title, brief, url))
 					}
 				}
 			},
@@ -92,4 +74,25 @@ func fetchRSS(url string) (*gofeed.Feed, error) {
 	return feed, nil
 }
 
-// EXAMPLE https://haskellweekly.news/podcast.rss
+func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, brief bool, url bool) string {
+	p := bluemonday.StrictPolicy()
+	var buffer bytes.Buffer
+	if source {
+		buffer.WriteString(fmt.Sprintf("*%s*\n", feed.Title))
+	}
+	if title {
+		buffer.WriteString(fmt.Sprintf("**%s**\n", item.Title))
+	}
+	if source || title {
+		buffer.WriteString("\n")
+	}
+	if brief {
+		buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Description)))
+	} else {
+		buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Content)))
+	}
+	if url {
+		buffer.WriteString(fmt.Sprintf("\n\n`%s`", item.Link))
+	}
+	return buffer.String()
+}

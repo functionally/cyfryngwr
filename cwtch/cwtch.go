@@ -28,16 +28,20 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot) {
 	for {
 		message := cwtchbot.Queue.Next()
 		cid, err := cwtchbot.Peer.FetchConversationInfo(message.Data[event.RemotePeer])
-		handle := dispatch.Handle(cid.Handle)
-		dispatcher.Register(handle, func(response dispatch.Response) {
-			err = sendMessage(cwtchbot, cid, string(response))
-			if err != nil {
-				log.Printf("Failed to send message:\n%v\n", err)
-			}
-		})
 		if err != nil {
 			log.Printf("Failed to fetch conversation:\n%v\n", err)
 		} else {
+			handle := dispatch.Handle(cid.Handle)
+			dispatcher.Register(handle, func(response dispatch.Response) {
+				text := string(response)
+				if len(text) > 7000 {
+					text = text[:7000]
+				}
+				err = sendMessage(cwtchbot, cid, text)
+				if err != nil {
+					log.Printf("Failed to send message:\n%v\n", err)
+				}
+			})
 			switch message.EventType {
 			case event.NewMessageFromPeer:
 				msg := cwtchbot.UnpackMessage(message.Data[event.Data])

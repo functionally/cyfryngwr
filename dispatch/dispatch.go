@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"strings"
 
@@ -39,11 +40,13 @@ func (self Dispatcher) Request(handle Handle, request Request) error {
 	if !exists {
 		return fmt.Errorf("Requestor %v not found")
 	}
-	result, err := Run(string(request))
+	results, err := Run(string(request))
 	if err != nil {
 		return err
 	}
-	respond(Response(result))
+	for _, result := range results {
+		respond(Response(result))
+	}
 	return nil
 }
 
@@ -55,9 +58,9 @@ func New(config map[string]interface{}) (*Dispatcher, error) {
 	return &dispatcher, nil
 }
 
-func Run(input string) (string, error) {
+func Run(input string) ([]string, error) {
 
-	var result bytes.Buffer
+	var results = list.New()
 	var errResult error = nil
 
 	var rootCmd = &cobra.Command{
@@ -67,27 +70,37 @@ func Run(input string) (string, error) {
 			cmd.Help()
 		},
 	}
-	rootCmd.SetOut(&result)
+	var cmdResult bytes.Buffer
+	rootCmd.SetOut(&cmdResult)
 
 	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Reply with version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			result.WriteString(fmt.Sprintf("Cyfryngwr %s (%s)", version, gitCommit))
+			results.PushBack(fmt.Sprintf("Cyfryngwr %s (%s)", version, gitCommit))
 		},
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	rootCmd.AddCommand(rss.Cmd(&result, &errResult))
+	rootCmd.AddCommand(rss.Cmd(results, &errResult))
 
 	args, err := shlex.Split(strings.TrimPrefix(input, "/"))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return result.String(), errResult
+	if cmdResult.Len() > 0 {
+		results.PushFront(cmdResult.String())
+	}
+	result := make([]string, results.Len())
+	for i := 0; results.Len() > 0; i += 1 {
+		x := results.Front()
+		result[i] = x.Value.(string)
+		results.Remove(x)
+	}
+	return result, errResult
 }

@@ -31,7 +31,8 @@ func fetchRSS(url string) (*gofeed.Feed, error) {
 }
 
 func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, brief bool, url bool) string {
-	re := regexp.MustCompile(`\n{3,}`)
+	excessiveNewlines := regexp.MustCompile(`\n{3,}`)
+	trailingSpace := regexp.MustCompile(`[\s\n]+$`)
 	p := bluemonday.StrictPolicy()
 	var buffer bytes.Buffer
 	if source {
@@ -40,13 +41,25 @@ func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, b
 	if title {
 		buffer.WriteString(fmt.Sprintf("**%s**\n\n", item.Title))
 	}
+	var text string
 	if brief {
-		buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Description)))
+		text = fmt.Sprintf("%s", p.Sanitize(item.Description))
 	} else {
-		buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Content)))
+		text = fmt.Sprintf("%s", p.Sanitize(item.Content))
 	}
+	text = excessiveNewlines.ReplaceAllString(text, "\n\n")
+	text = trailingSpace.ReplaceAllString(text, "")
+	text = html.UnescapeString(text)
+	budget := 7000 - 6 - buffer.Len()
+	if url {
+		budget -= len(item.Link) + 1
+	}
+	if len(text) > budget {
+	  text = text[:budget] + " . . ."	
+	}
+	buffer.WriteString(text)
 	if url {
 		buffer.WriteString(fmt.Sprintf("\n\n`%s`", item.Link))
 	}
-	return html.UnescapeString(re.ReplaceAllString(buffer.String(), "\n\n"))
+	return buffer.String()
 }

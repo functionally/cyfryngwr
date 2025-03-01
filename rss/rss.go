@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"container/list"
 	"fmt"
+	"html"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/microcosm-cc/bluemonday"
@@ -36,7 +38,6 @@ func Cmd(results *list.List, errResult *error) *cobra.Command {
 				if err != nil {
 					*errResult = err
 				} else {
-					fmt.Printf("UPDATED %s\n", feed.Updated)
 					for i, item := range feed.Items {
 						if uint(i) >= count {
 							break
@@ -75,16 +76,14 @@ func fetchRSS(url string) (*gofeed.Feed, error) {
 }
 
 func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, brief bool, url bool) string {
+	re := regexp.MustCompile(`\n{3,}`)
 	p := bluemonday.StrictPolicy()
 	var buffer bytes.Buffer
 	if source {
-		buffer.WriteString(fmt.Sprintf("*%s*\n", feed.Title))
+		buffer.WriteString(fmt.Sprintf("*%s*\n\n", feed.Title))
 	}
 	if title {
-		buffer.WriteString(fmt.Sprintf("**%s**\n", item.Title))
-	}
-	if source || title {
-		buffer.WriteString("\n")
+		buffer.WriteString(fmt.Sprintf("**%s**\n\n", item.Title))
 	}
 	if brief {
 		buffer.WriteString(fmt.Sprintf("%s", p.Sanitize(item.Description)))
@@ -94,5 +93,5 @@ func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, b
 	if url {
 		buffer.WriteString(fmt.Sprintf("\n\n`%s`", item.Link))
 	}
-	return buffer.String()
+	return html.UnescapeString(re.ReplaceAllString(buffer.String(), "\n\n"))
 }

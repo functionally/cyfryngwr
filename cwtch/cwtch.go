@@ -46,7 +46,7 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot) {
 			case event.NewMessageFromPeer:
 				msg := cwtchbot.UnpackMessage(message.Data[event.Data])
 				text := msg.Data
-				if len(text) > 0 && text[0] == "/" {
+				if len(text) > 0 && text[0] == '/' {
 					err := dispatcher.Request(handle, dispatch.Request(text))
 					if err != nil {
 						log.Printf("Failed to process message:\n%v\n", err)

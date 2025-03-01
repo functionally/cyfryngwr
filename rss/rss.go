@@ -43,10 +43,11 @@ func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, b
 	}
 	var text string
 	if brief {
-		text = fmt.Sprintf("%s", p.Sanitize(item.Description))
+		text = item.Description
 	} else {
-		text = fmt.Sprintf("%s", p.Sanitize(item.Content))
+		text = item.Content
 	}
+	text = p.Sanitize(text)
 	text = excessiveNewlines.ReplaceAllString(text, "\n\n")
 	text = trailingSpace.ReplaceAllString(text, "")
 	text = html.UnescapeString(text)
@@ -55,7 +56,7 @@ func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, b
 		budget -= len(item.Link) + 4
 	}
 	if len(text) > budget {
-	  text = text[:budget] + " . . ."	
+		text = text[:budget] + " . . ."
 	}
 	buffer.WriteString(text)
 	if url {

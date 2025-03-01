@@ -52,7 +52,7 @@ func formatItem(feed *gofeed.Feed, item *gofeed.Item, source bool, title bool, b
 	text = html.UnescapeString(text)
 	budget := 7000 - 6 - buffer.Len()
 	if url {
-		budget -= len(item.Link) + 1
+		budget -= len(item.Link) + 4
 	}
 	if len(text) > budget {
 	  text = text[:budget] + " . . ."	

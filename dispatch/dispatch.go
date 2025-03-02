@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
 	"log"
 	"strings"
@@ -19,13 +18,15 @@ var (
 	gitCommit = "none"
 )
 
-type Responder func(string) ()
+type Responder func(string)
 
 type Dispatcher struct {
 	config     map[string]interface{}
 	responders map[string]Responder
-	mu sync.Mutex
-	shutdown chan any
+	rssManager *rss.Manager
+	rssUsers   map[string]*rss.User
+	mu         sync.Mutex
+	shutdown   chan any
 }
 
 func New(config map[string]interface{}) (*Dispatcher, error) {
@@ -33,36 +34,55 @@ func New(config map[string]interface{}) (*Dispatcher, error) {
 	dispatcher := Dispatcher{
 		config:     config,
 		responders: make(map[string]Responder, bufferSize),
-		mu: sync.Mutex{},
-		shutdown: make(chan any, 1),
+		rssManager: rss.New(),
+		rssUsers:   make(map[string]*rss.User, bufferSize),
+		mu:         sync.Mutex{},
+		shutdown:   make(chan any, 1),
 	}
 	return &dispatcher, nil
 }
 
 func (self Dispatcher) Loop() {
+
 	for {
 		select {
 		case <-self.shutdown:
+			for _, user := range self.rssUsers {
+				user.Stop()
+			}
 			return
 		}
 	}
+
 }
 
 func (self Dispatcher) Online(handle string, respond Responder) {
 	self.mu.Lock()
-	defer self.mu.Unlock()
 	self.responders[handle] = respond
+	rssUser, exists := self.rssUsers[handle]
+	if !exists {
+		rssUser = rss.MakeUser(self.rssManager)
+		self.rssUsers[handle] = rssUser
+	}
+	self.mu.Unlock()
+	go rssUser.Start(respond)
 }
 
 func (self Dispatcher) Offline(handle string) {
 	self.mu.Lock()
-	defer self.mu.Unlock()
 	_, exists := self.responders[handle]
 	if !exists {
 		log.Printf("Offline user not found: %s\n", handle)
-	} else {
-		delete(self.responders, handle)
+		return
 	}
+	rssUser, exists := self.rssUsers[handle]
+	if !exists {
+		log.Printf("Offline RSS user not found: %s\n", handle)
+		return
+	}
+	delete(self.responders, handle)
+	self.mu.Unlock()
+	rssUser.Stop()
 }
 
 func (self Dispatcher) Request(handle string, request string) {
@@ -71,15 +91,14 @@ func (self Dispatcher) Request(handle string, request string) {
 	respond, exists := self.responders[handle]
 	if !exists {
 		log.Printf("Requesting user not found: %v\n", handle)
+		return
 	}
-	results, err := Run(request)
-	if err != nil {
-		log.Printf("Command failed: %s\n%s\n", request, err.Error())
-		respond(err.Error())
+	rssUser, exists := self.rssUsers[handle]
+	if !exists {
+		log.Printf("Requesting RSS user not found: %v\n", handle)
+		return
 	}
-	for _, result := range results {
-		respond(result)
-	}
+	Run(rssUser, request, respond)
 }
 
 func (self Dispatcher) Shutdown() {
@@ -88,10 +107,7 @@ func (self Dispatcher) Shutdown() {
 	self.shutdown <- nil
 }
 
-func Run(input string) ([]string, error) {
-
-	var results = list.New()
-	var errResult error = nil
+func Run(rssUser *rss.User, input string, respond func(string)) {
 
 	var rootCmd = &cobra.Command{
 		Use:   "/",
@@ -107,31 +123,26 @@ func Run(input string) ([]string, error) {
 		Use:   "version",
 		Short: "Reply with version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			results.PushBack(fmt.Sprintf("Cyfryngwr %s (%s)", version, gitCommit))
+			respond(fmt.Sprintf("Cyfryngwr %s (%s)", version, gitCommit))
 		},
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	rootCmd.AddCommand(rss.Cmd(results, &errResult))
+	rootCmd.AddCommand(rss.Cmd(rssUser))
 
 	args, err := shlex.Split(strings.TrimPrefix(input, "/"))
 	if err != nil {
-		return nil, err
+		respond(err.Error())
+		return
 	}
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
-		return nil, err
+		respond(err.Error())
+		return
 	}
 
 	if cmdResult.Len() > 0 {
-		results.PushFront(cmdResult.String())
+		respond(cmdResult.String())
 	}
-	result := make([]string, results.Len())
-	for i := 0; results.Len() > 0; i += 1 {
-		x := results.Front()
-		result[i] = x.Value.(string)
-		results.Remove(x)
-	}
-	return result, errResult
 
 }

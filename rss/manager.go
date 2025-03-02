@@ -12,6 +12,42 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+type Url string
+
+type Manager struct {
+	feeds map[Url]*gofeed.Feed
+}
+
+func New() *Manager {
+	return &Manager{
+		feeds: make(map[Url]*gofeed.Feed),
+	}
+}
+
+func (self Manager) Fetch(url Url, since *time.Time, count uint) (*gofeed.Feed, []*gofeed.Item, error) {
+
+	feed, err := fetchRSS(string(url))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	items := make([]*gofeed.Item, 0, len(feed.Items))
+	for _, item := range feed.Items {
+		if count <= 0 {
+			break
+		}
+		updated := item.UpdatedParsed
+		published := item.PublishedParsed
+		if updated != nil && updated.After(*since) || published != nil && published.After(*since) || published == nil {
+			items = append(items, item)
+			count -= 1
+		}
+	}
+
+	return feed, items, nil
+
+}
+
 func fetchRSS(url string) (*gofeed.Feed, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)

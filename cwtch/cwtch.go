@@ -1,7 +1,6 @@
 package cwtch
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -41,7 +40,7 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.
 
 			cid, err := cwtchbot.Peer.FetchConversationInfo(message.Data[event.RemotePeer])
 			if err != nil {
-				log.Printf("Failed to fetch conversation:\n%v\n", err)
+				log.Printf("Failed to fetch conversation: %v\n", err)
 			} else {
 				handle := cid.Handle
 				switch message.EventType {
@@ -57,7 +56,7 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.
 								}
 								err = sendMessage(cwtchbot, cid, text)
 								if err != nil {
-									log.Printf("Failed to send message:\n%v\n", err)
+									log.Printf("Failed to send message: %v\n", err)
 								}
 							})
 						} else if state == "Disconnected" {
@@ -73,15 +72,16 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.
 					}
 
 				case event.ContactCreated:
-					fmt.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])
+					log.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])
 					cwtchbot.Peer.AcceptConversation(cid.ID)
 					sendMessage(cwtchbot, cid, "Hello!")
+
 				}
 
 			}
 
 		case s := <-stop:
-			fmt.Printf("Stopping for signal: %o\n", s)
+			log.Printf("Stopping for signal: %o\n", s)
 			dispatcher.Shutdown()
 			<-finished
 			return

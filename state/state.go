@@ -2,11 +2,11 @@ package state
 
 type Handle string
 
-type Responder func(string) ()
+type Responder func(string)
 
 type Online struct {
-	User Handle
-  Respond Responder
+	User    Handle
+	Respond Responder
 }
 
 type Offline struct {

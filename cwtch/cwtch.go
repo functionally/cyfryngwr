@@ -25,37 +25,41 @@ func Connect(folder string, name string, description string) *bot.CwtchBot {
 }
 
 func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot) {
+	shutdown := make(chan bool)
+	finished := make(chan bool)
+	go dispatcher.Loop(shutdown, finished)
 	for {
 		message := cwtchbot.Queue.Next()
 		cid, err := cwtchbot.Peer.FetchConversationInfo(message.Data[event.RemotePeer])
 		if err != nil {
 			log.Printf("Failed to fetch conversation:\n%v\n", err)
 		} else {
-			handle := dispatch.Handle(cid.Handle)
-			dispatcher.Register(handle, func(response dispatch.Response) {
-				text := string(response)
-				if len(text) > 7000 {
-					text = text[:7000]
-				}
-				err = sendMessage(cwtchbot, cid, text)
-				if err != nil {
-					log.Printf("Failed to send message:\n%v\n", err)
-				}
-			})
+			handle := cid.Handle
+//	fmt.Printf("EVENT %s: %o\n", message.EventType, message)
 			switch message.EventType {
+			case event.PeerStateChange:
+				state, exists := message.Data[event.ConnectionState]
+				if exists {
+					if state == "Authenticated" {
+						dispatcher.Online(handle, func(response string) {
+	    			  text := string(response)
+	    			  if len(text) > 7000 {
+	    			  	text = text[:7000]
+	    			  }
+	    			  err = sendMessage(cwtchbot, cid, text)
+	    			  if err != nil {
+	    			  	log.Printf("Failed to send message:\n%v\n", err)
+	    			  }
+	    		  })
+					} else if state == "Disconnected" {
+						dispatcher.Offline(handle)
+					}
+				}
 			case event.NewMessageFromPeer:
 				msg := cwtchbot.UnpackMessage(message.Data[event.Data])
 				text := msg.Data
 				if len(text) > 0 && text[0] == '/' {
-					err := dispatcher.Request(handle, dispatch.Request(text))
-					if err != nil {
-						log.Printf("Failed to process message:\n%v\n", err)
-						result := fmt.Sprintf("Failed to process message: %v\n", err)
-						err = sendMessage(cwtchbot, cid, result)
-						if err != nil {
-							log.Printf("Failed to send message:\n%v\n", err)
-						}
-					}
+				   dispatcher.Request(handle, text)
 				}
 			case event.ContactCreated:
 				fmt.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])

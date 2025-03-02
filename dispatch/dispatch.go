@@ -25,20 +25,23 @@ type Dispatcher struct {
 	online     chan state.Online
 	offline    chan state.Offline
 	request    chan state.Request
+	shutdown   chan any
 }
 
 func New(config map[string]interface{}) (*Dispatcher, error) {
+	const bufferSize = 10
 	dispatcher := Dispatcher{
 		config:     config,
-		responders: make(map[state.Handle]state.Responder),
-		online:     make(chan state.Online),
-		offline:    make(chan state.Offline),
-		request:    make(chan state.Request),
+		responders: make(map[state.Handle]state.Responder, bufferSize),
+		online:     make(chan state.Online, bufferSize),
+		offline:    make(chan state.Offline, bufferSize),
+		request:    make(chan state.Request, bufferSize),
+		shutdown:   make(chan any, 1),
 	}
 	return &dispatcher, nil
 }
 
-func (self Dispatcher) Loop(shutdown chan any, finished chan any) {
+func (self Dispatcher) Loop() {
 	for {
 		select {
 		case x := <-self.online:
@@ -63,8 +66,7 @@ func (self Dispatcher) Loop(shutdown chan any, finished chan any) {
 			for _, result := range results {
 				respond(result)
 			}
-		case <-shutdown:
-			finished <- nil
+		case <-self.shutdown:
 			return
 		}
 	}
@@ -80,6 +82,10 @@ func (self Dispatcher) Offline(handle string) {
 
 func (self Dispatcher) Request(handle string, request string) {
 	self.request <- state.Request{User: state.Handle(handle), Text: request}
+}
+
+func (self Dispatcher) Shutdown() {
+	self.shutdown <- nil
 }
 
 func Run(input string) ([]string, error) {

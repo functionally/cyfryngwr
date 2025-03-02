@@ -25,19 +25,27 @@ func Connect(folder string, name string, description string) *bot.CwtchBot {
 	return cwtchbot
 }
 
-func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.Signal) () {
-	shutdown := make(chan any, 1)
+func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.Signal) {
+
 	finished := make(chan any, 1)
-	go dispatcher.Loop(shutdown, finished)
+	go func() {
+		dispatcher.Loop()
+		finished <- nil
+	}()
+
 	for {
+
 		select {
+
 		case message := <-cwtchbot.Queue.OutChan():
+
 			cid, err := cwtchbot.Peer.FetchConversationInfo(message.Data[event.RemotePeer])
 			if err != nil {
 				log.Printf("Failed to fetch conversation:\n%v\n", err)
 			} else {
 				handle := cid.Handle
 				switch message.EventType {
+
 				case event.PeerStateChange:
 					state, exists := message.Data[event.ConnectionState]
 					if exists {
@@ -56,25 +64,31 @@ func Loop(dispatcher *dispatch.Dispatcher, cwtchbot *bot.CwtchBot, stop chan os.
 							dispatcher.Offline(handle)
 						}
 					}
+
 				case event.NewMessageFromPeer:
 					msg := cwtchbot.UnpackMessage(message.Data[event.Data])
 					text := msg.Data
 					if len(text) > 0 && text[0] == '/' {
 						dispatcher.Request(handle, text)
 					}
+
 				case event.ContactCreated:
 					fmt.Printf("Auto approving stranger %v %v\n", cid, message.Data[event.RemotePeer])
 					cwtchbot.Peer.AcceptConversation(cid.ID)
 					sendMessage(cwtchbot, cid, "Hello!")
 				}
+
 			}
+
 		case s := <-stop:
 			fmt.Printf("Stopping for signal: %o\n", s)
-			shutdown <- true
+			dispatcher.Shutdown()
 			<-finished
 			return
 		}
+
 	}
+
 }
 
 func sendMessage(cwtchbot *bot.CwtchBot, cid *model.Conversation, text string) error {

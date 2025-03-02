@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/google/shlex"
 	"github.com/spf13/cobra"
 
 	"github.com/functionally/cyfryngwr/rss"
-	"github.com/functionally/cyfryngwr/state"
 )
 
 var (
@@ -19,24 +19,22 @@ var (
 	gitCommit = "none"
 )
 
+type Responder func(string) ()
+
 type Dispatcher struct {
 	config     map[string]interface{}
-	responders map[state.Handle]state.Responder
-	online     chan state.Online
-	offline    chan state.Offline
-	request    chan state.Request
-	shutdown   chan any
+	responders map[string]Responder
+	mu sync.Mutex
+	shutdown chan any
 }
 
 func New(config map[string]interface{}) (*Dispatcher, error) {
 	const bufferSize = 10
 	dispatcher := Dispatcher{
 		config:     config,
-		responders: make(map[state.Handle]state.Responder, bufferSize),
-		online:     make(chan state.Online, bufferSize),
-		offline:    make(chan state.Offline, bufferSize),
-		request:    make(chan state.Request, bufferSize),
-		shutdown:   make(chan any, 1),
+		responders: make(map[string]Responder, bufferSize),
+		mu: sync.Mutex{},
+		shutdown: make(chan any, 1),
 	}
 	return &dispatcher, nil
 }
@@ -44,47 +42,49 @@ func New(config map[string]interface{}) (*Dispatcher, error) {
 func (self Dispatcher) Loop() {
 	for {
 		select {
-		case x := <-self.online:
-			self.responders[x.User] = x.Respond
-		case x := <-self.offline:
-			_, exists := self.responders[x.User]
-			if !exists {
-				log.Printf("Offline user not found: %s\n", x.User)
-			} else {
-				delete(self.responders, x.User)
-			}
-		case x := <-self.request:
-			respond, exists := self.responders[x.User]
-			if !exists {
-				log.Printf("Requesting user not found: %v\n", x.User)
-			}
-			results, err := Run(x.Text)
-			if err != nil {
-				log.Printf("Command failed: %s\n%s\n", x.Text, err.Error())
-				respond(err.Error())
-			}
-			for _, result := range results {
-				respond(result)
-			}
 		case <-self.shutdown:
 			return
 		}
 	}
 }
 
-func (self Dispatcher) Online(handle string, respond state.Responder) {
-	self.online <- state.Online{User: state.Handle(handle), Respond: respond}
+func (self Dispatcher) Online(handle string, respond Responder) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.responders[handle] = respond
 }
 
 func (self Dispatcher) Offline(handle string) {
-	self.offline <- state.Offline{User: state.Handle(handle)}
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	_, exists := self.responders[handle]
+	if !exists {
+		log.Printf("Offline user not found: %s\n", handle)
+	} else {
+		delete(self.responders, handle)
+	}
 }
 
 func (self Dispatcher) Request(handle string, request string) {
-	self.request <- state.Request{User: state.Handle(handle), Text: request}
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	respond, exists := self.responders[handle]
+	if !exists {
+		log.Printf("Requesting user not found: %v\n", handle)
+	}
+	results, err := Run(request)
+	if err != nil {
+		log.Printf("Command failed: %s\n%s\n", request, err.Error())
+		respond(err.Error())
+	}
+	for _, result := range results {
+		respond(result)
+	}
 }
 
 func (self Dispatcher) Shutdown() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	self.shutdown <- nil
 }
 
@@ -133,4 +133,5 @@ func Run(input string) ([]string, error) {
 		results.Remove(x)
 	}
 	return result, errResult
+
 }
